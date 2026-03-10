@@ -204,6 +204,8 @@ def parse_main_post(main_text: str, home_team: str, away_team: str) -> ParsedMat
     red_count = 0
     last_event = ""
 
+    seen_event_lines = set()
+
     for line in lines:
         minute_match = MINUTE_RE.match(line)
         if not minute_match:
@@ -212,6 +214,12 @@ def parse_main_post(main_text: str, home_team: str, away_team: str) -> ParsedMat
         minute = minute_match.group(1) + "'"
         content = minute_match.group(2).strip()
         low = content.casefold()
+
+        # Bir xil event qatori qayta tushsa, ikkinchi marta hisoblamaymiz
+        event_key = f"{minute}|{content}"
+        if event_key in seen_event_lines:
+            continue
+        seen_event_lines.add(event_key)
 
         if content:
             last_event = f"{minute} {content}"
@@ -252,7 +260,6 @@ def parse_main_post(main_text: str, home_team: str, away_team: str) -> ParsedMat
         red_count=red_count,
         last_event=last_event,
     )
-
 
 def render_scoreboard(state: ScoreboardState, parsed: ParsedMatchInfo) -> str:
     if parsed.status == "finished":
@@ -434,6 +441,7 @@ async def scoreboard_recreate_post(
         await save_scoreboard_state(state)
     except Exception as e:
         logging.exception("scoreboard recreate xatolik: %s", e)
+
 
 
 
