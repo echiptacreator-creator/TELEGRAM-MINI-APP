@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import aiosqlite
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -265,6 +266,9 @@ async def update_main_post(state: MatchState):
         return
 
     try:
+
+        keyboard = build_live_keyboard(state.channel_id)
+        
         await bot.edit_message_text(
             chat_id=state.channel_id,
             message_id=state.main_message_id,
@@ -694,6 +698,58 @@ async def cmd_teams(message: Message):
 
     await message.answer(f"Jamoalar saqlandi: {home} vs {away}")
 
+def build_live_keyboard(channel_id: int):
+    buttons = LIVE_BUTTONS.get(channel_id)
+
+    if not buttons:
+        return None
+
+    rows = []
+    row = []
+
+    for btn in buttons:
+        row.append(
+            InlineKeyboardButton(
+                text=btn["text"],
+                url=btn["url"]
+            )
+        )
+
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+
+    if row:
+        rows.append(row)
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+@dp.message(Command("tugma"))
+async def cmd_add_buttons(message: Message):
+    if message.from_user.id != OWNER_ID:
+        return
+
+    text = message.text.replace("/tugma", "").strip()
+
+    pattern = r'\d+TUGMA\s*-\s*"([^"]+)"\s*\{([^}]+)\}'
+    matches = re.findall(pattern, text)
+
+    if not matches:
+        await message.answer("Format xato.\n\nMisol:\n/tugma 1TUGMA - \"Statistika\" {https://link.com}")
+        return
+
+    buttons = []
+
+    for name, url in matches:
+        buttons.append({
+            "text": name,
+            "url": url
+        })
+
+    LIVE_BUTTONS[message.chat.id] = buttons
+
+    await message.answer("✅ Tugmalar saqlandi")
+
 async def main():
     await init_db()
     await init_scoreboard_db()
@@ -704,6 +760,7 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
 
 
