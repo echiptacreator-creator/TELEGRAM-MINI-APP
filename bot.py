@@ -68,8 +68,7 @@ class MatchState:
     freeze_minute: Optional[str]
     first_half_extra_asked: int
     second_half_extra_asked: int
-
-    stream_url: str | None = None
+    stream_url: Optional[str] = None
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -88,7 +87,8 @@ async def init_db():
                 minute_offset INTEGER NOT NULL DEFAULT 0,
                 freeze_minute TEXT,
                 first_half_extra_asked INTEGER NOT NULL DEFAULT 0,
-                second_half_extra_asked INTEGER NOT NULL DEFAULT 0
+                second_half_extra_asked INTEGER NOT NULL DEFAULT 0,
+                stream_url TEXT
             )
             """
         )
@@ -103,6 +103,13 @@ async def init_db():
         try:
             await db.execute(
                 "ALTER TABLE matches ADD COLUMN second_half_extra_asked INTEGER NOT NULL DEFAULT 0"
+            )
+        except:
+            pass
+
+        try:
+            await db.execute(
+                "ALTER TABLE matches ADD COLUMN stream_url TEXT"
             )
         except:
             pass
@@ -133,7 +140,7 @@ async def get_state(channel_id: int) -> MatchState:
             "SELECT channel_id, started, main_message_id, main_text, period, "
             "first_half_start_ts, second_half_start_ts, first_half_extra, "
             "second_half_extra, minute_offset, freeze_minute, "
-            "first_half_extra_asked, second_half_extra_asked "
+            "first_half_extra_asked, second_half_extra_asked, stream_url "
             "FROM matches WHERE channel_id = ?",
             (channel_id,),
         ) as cur:
@@ -146,8 +153,8 @@ async def get_state(channel_id: int) -> MatchState:
                     channel_id, started, main_message_id, main_text, period,
                     first_half_start_ts, second_half_start_ts,
                     first_half_extra, second_half_extra, minute_offset, freeze_minute,
-                    first_half_extra_asked, second_half_extra_asked
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    first_half_extra_asked, second_half_extra_asked, stream_url
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     channel_id,
@@ -163,6 +170,7 @@ async def get_state(channel_id: int) -> MatchState:
                     None,
                     0,
                     0,
+                    None,
                 ),
             )
             await db.commit()
@@ -171,14 +179,13 @@ async def get_state(channel_id: int) -> MatchState:
                 "SELECT channel_id, started, main_message_id, main_text, period, "
                 "first_half_start_ts, second_half_start_ts, first_half_extra, "
                 "second_half_extra, minute_offset, freeze_minute, "
-                "first_half_extra_asked, second_half_extra_asked "
+                "first_half_extra_asked, second_half_extra_asked, stream_url "
                 "FROM matches WHERE channel_id = ?",
                 (channel_id,),
             ) as cur:
                 row = await cur.fetchone()
 
         return MatchState(*row)
-
 async def save_state(state: MatchState):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -195,7 +202,8 @@ async def save_state(state: MatchState):
                 minute_offset = ?,
                 freeze_minute = ?,
                 first_half_extra_asked = ?,
-                second_half_extra_asked = ?
+                second_half_extra_asked = ?,
+                stream_url = ?
             WHERE channel_id = ?
             """,
             (
@@ -211,6 +219,7 @@ async def save_state(state: MatchState):
                 state.freeze_minute,
                 state.first_half_extra_asked,
                 state.second_half_extra_asked,
+                state.stream_url,
                 state.channel_id,
             ),
         )
@@ -287,7 +296,7 @@ async def update_main_post(state: MatchState):
             chat_id=state.channel_id,
             message_id=state.main_message_id,
             text=state.main_text[:4096],
-            reply_markup=get_main_keyboard(state)
+            reply_markup=get_main_keyboard(state),
         )
 
         await scoreboard_sync_from_main_post(
@@ -299,10 +308,17 @@ async def update_main_post(state: MatchState):
 
     except Exception as e:
         logging.exception("update_main_post xatolik: %s", e)
-        raise
 
-async def create_new_live_post(channel_id: int, title: str = "📍 <b>Live davom etmoqda</b>") -> int:
-    sent = await bot.send_message(chat_id=channel_id, text=title)
+async def create_new_live_post(
+    channel_id: int,
+    title: str = "📍 <b>Live davom etmoqda</b>",
+    state: MatchState | None = None,
+) -> int:
+    sent = await bot.send_message(
+        chat_id=channel_id,
+        text=title,
+        reply_markup=get_main_keyboard(state) if state else None,
+    )
     return sent.message_id
 
 async def append_event(state: MatchState, text: str, with_minute: bool = True):
@@ -421,7 +437,6 @@ async def handle_channel_posts(message: Message):
     text = message.text.strip()
     lower = text.casefold()
 
-    # 1) MATCH START
     if lower.startswith("uchrashuv boshlandi"):
         state.started = 1
         state.period = "first_half"
@@ -431,20 +446,26 @@ async def handle_channel_posts(message: Message):
         state.second_half_extra = 0
         state.minute_offset = 0
         state.freeze_minute = "1'"
-        state.main_message_id = message.message_id
-        state.main_text = "⚽ <b>Uchrashuv boshlandi</b>"
         state.first_half_extra_asked = 0
         state.second_half_extra_asked = 0
+        # state.stream_url ni o‘chirmaymiz — oldindan /stream berilgan bo‘lsa saqlanib qolsin
+
+        state.main_text = "⚽ <b>Uchrashuv boshlandi</b>"
+
+        sent = await bot.send_message(
+            chat_id=message.chat.id,
+            text=state.main_text,
+            reply_markup=get_main_keyboard(state),
+        )
+        state.main_message_id = sent.message_id
 
         await save_state(state)
 
         await scoreboard_reset_match(
             bot=bot,
             channel_id=message.chat.id,
-            main_message_id=message.message_id,
+            main_message_id=state.main_message_id,
         )
-
-        await update_main_post(state)
 
         parts = [p.strip() for p in text.split("|")]
         if len(parts) >= 3 and parts[1] and parts[2]:
@@ -456,13 +477,6 @@ async def handle_channel_posts(message: Message):
                 main_text=state.main_text,
             )
 
-        try:
-            await bot.send_message(
-                OWNER_ID,
-                f"Kanal {message.chat.title} uchun o‘yin boshlandi."
-            )
-        except Exception:
-            pass
         return
 
     if not state.started or not state.main_message_id:
@@ -484,10 +498,10 @@ async def handle_channel_posts(message: Message):
         state.minute_offset = 45
         state.freeze_minute = "46'"
 
-        # 2-bo'lim uchun yangi live post ochamiz
         new_message_id = await create_new_live_post(
             message.chat.id,
-            "▶️ <b>Ikkinchi bo‘lim boshlandi</b>"
+            "▶️ <b>Ikkinchi bo‘lim boshlandi</b>",
+            state,
         )
 
         state.main_message_id = new_message_id
@@ -561,7 +575,7 @@ async def handle_media_posts(message: Message):
         title = "📍 <b>Live davom etmoqda</b>"
 
     # Yangi live post ochamiz
-    new_message_id = await create_new_live_post(message.chat.id, title)
+    new_message_id = await create_new_live_post(message.chat.id, title, state)
 
     # Endi keyingi sharhlar shu postga tushadi
     state.main_message_id = new_message_id
@@ -715,20 +729,34 @@ async def cmd_teams(message: Message):
 
 @dp.message(Command("stream"))
 async def set_stream(message: Message):
-
-    if message.from_user.id != OWNER_ID:
+    if not message.from_user or message.from_user.id != OWNER_ID:
         return
 
-    url = message.text.split(maxsplit=1)[1]
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Format: /stream https://link")
+        return
 
-    for state in match_states.values():
-        if state.started:
-            state.stream_url = url
+    url = parts[1].strip()
 
-            await update_main_post(state)
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT channel_id FROM matches WHERE started = 1 ORDER BY channel_id DESC"
+        ) as cur:
+            row = await cur.fetchone()
 
-            await message.answer("✅ Jonli efir link qo‘shildi")
-            return
+    if not row:
+        await message.answer("Aktiv o‘yin topilmadi.")
+        return
+
+    channel_id = row[0]
+    state = await get_state(channel_id)
+    state.stream_url = url
+
+    await save_state(state)
+    await update_main_post(state)
+
+    await message.answer("✅ Jonli efir link qo‘shildi")
 
 async def main():
     await init_db()
@@ -740,6 +768,7 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
 
 
