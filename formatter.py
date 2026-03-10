@@ -9,7 +9,7 @@ def add_match_event_emoji(text: str) -> str:
     known_starts = (
         "⚽", "🥅", "🎯", "🟨", "🟥", "🔁", "🚩", "📺",
         "🧤", "⛔", "🤕", "⏸", "▶️", "🏁", "📣", "🔥",
-        "👏", "❌", "📯", "☕"
+        "👏", "❌", "📯", "☕", "🏳️"
     )
     if raw.startswith(known_starts):
         return raw
@@ -18,8 +18,8 @@ def add_match_event_emoji(text: str) -> str:
     rules = [
         # Gollar
         (["avtogol", "o'z darvozasiga", "o‘z darvozasiga"], "😬⚽"),
-        (["goool", "gooool", "gooooool", "gol", "goal", "gool"], "⚽"),
-        (["hisobni ochdi"], "🔥"),
+        (["goool", "gooool", "gooooool","goooooool","gooooooool", "goooooooool", "gooooooooool", "goooooooooool", "gooooooooooool", "goooooooooooool", "gooooooooooooool", "goooooooooooooool", "gol", "goal", "gool"], "⚽"),
+        (["hisobni ochdi", "Qanday vaziyaaaat", "Xavfli vaziyaaaat", "Uxxxxxx",], "🔥"),
         (["dubl", "ikkinchi golini urdi"], "⚽⚽"),
         (["xet-trik", "hattrick", "hat-trick"], "🎩⚽"),
 
@@ -46,7 +46,7 @@ def add_match_event_emoji(text: str) -> str:
 
         # Standart vaziyatlar
         (["korner", "burchak to'pi", "burchak to‘pi", "burchak"], "🚩"),
-        (["offsayd", "ofsayd"], "🚩"),
+        (["offsayd", "ofsayd", "o'yindan tashqari holat", "o'yindan tashqari holatda"], "🏳️"),
         (["jarima zarbasi", "standart vaziyat"], "🎯"),
 
         # O‘yin holatlari
@@ -68,3 +68,4 @@ def add_match_event_emoji(text: str) -> str:
 
 
     return raw
+
