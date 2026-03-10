@@ -113,52 +113,45 @@ async def get_state(channel_id: int) -> MatchState:
         ) as cur:
             row = await cur.fetchone()
 
-        if row:
-            return MatchState(*row)
+        if not row:
+            await db.execute(
+                """
+                INSERT OR IGNORE INTO matches (
+                    channel_id, started, main_message_id, main_text, period,
+                    first_half_start_ts, second_half_start_ts,
+                    first_half_extra, second_half_extra, minute_offset, freeze_minute,
+                    first_half_extra_asked, second_half_extra_asked
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    channel_id,
+                    0,
+                    None,
+                    "",
+                    "not_started",
+                    None,
+                    None,
+                    0,
+                    0,
+                    0,
+                    None,
+                    0,
+                    0,
+                ),
+            )
+            await db.commit()
 
-        state = MatchState(
-            channel_id=channel_id,
-            started=0,
-            main_message_id=None,
-            main_text="",
-            period="not_started",
-            first_half_start_ts=None,
-            second_half_start_ts=None,
-            first_half_extra=0,
-            second_half_extra=0,
-            minute_offset=0,
-            freeze_minute=None,
-            first_half_extra_asked=0,
-            second_half_extra_asked=0,
-        )
+            async with db.execute(
+                "SELECT channel_id, started, main_message_id, main_text, period, "
+                "first_half_start_ts, second_half_start_ts, first_half_extra, "
+                "second_half_extra, minute_offset, freeze_minute, "
+                "first_half_extra_asked, second_half_extra_asked "
+                "FROM matches WHERE channel_id = ?",
+                (channel_id,),
+            ) as cur:
+                row = await cur.fetchone()
 
-        await db.execute(
-            """
-            INSERT INTO matches (
-                channel_id, started, main_message_id, main_text, period,
-                first_half_start_ts, second_half_start_ts,
-                first_half_extra, second_half_extra, minute_offset, freeze_minute,
-                first_half_extra_asked, second_half_extra_asked
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                state.channel_id,
-                state.started,
-                state.main_message_id,
-                state.main_text,
-                state.period,
-                state.first_half_start_ts,
-                state.second_half_start_ts,
-                state.first_half_extra,
-                state.second_half_extra,
-                state.minute_offset,
-                state.freeze_minute,
-                state.first_half_extra_asked,
-                state.second_half_extra_asked,
-            ),
-        )
-        await db.commit()
-        return state
+        return MatchState(*row)
 
 async def save_state(state: MatchState):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -686,4 +679,5 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
