@@ -26,7 +26,7 @@ def add_match_event_emoji(text: str) -> str:
         # Penalti / VAR
         (["penalti gol", "penaltidan gol"], "🎯⚽"),
         (["penalti tepadi", "penalti berildi", "penalti"], "🎯"),
-        (["var bekor qildi", "gol bekor qilindi", "bekor qilindi"], "❌"),
+        (["var bekor qildi", "gol bekor qilindi", "goli bekor qilindi", "bekor qilindi"], "❌"),
         (["var", "videoyordamchi hakam"], "📺"),
 
         # Kartochkalar
@@ -65,5 +65,6 @@ def add_match_event_emoji(text: str) -> str:
     for keywords, emoji in rules:
         if any(keyword in lower for keyword in keywords):
             return f"{emoji} {raw}"
+
 
     return raw
