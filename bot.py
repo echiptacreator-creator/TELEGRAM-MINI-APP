@@ -55,12 +55,12 @@ DELETE_DELAY_SECONDS = 30
 
 @dataclass
 class MatchState:
-    self.stream_url: str | None = None
+    stream_url: str | None = None
     channel_id: int
     started: int
     main_message_id: Optional[int]
     main_text: str
-    period: str  # not_started, first_half, halftime, second_half, finished
+    period: str
     first_half_start_ts: Optional[int]
     second_half_start_ts: Optional[int]
     first_half_extra: int
@@ -739,6 +739,7 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
 
 
