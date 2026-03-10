@@ -24,6 +24,14 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 from dotenv import load_dotenv
+from scoreboard import (
+    init_scoreboard_db,
+    scoreboard_register_main_post,
+    scoreboard_sync_from_main_post,
+    scoreboard_set_teams,
+    scoreboard_reset_match,
+    scoreboard_recreate_post,
+)
 
 load_dotenv()
 
@@ -517,21 +525,38 @@ async def handle_media_posts(message: Message):
 
     state = await get_state(message.chat.id)
 
-    # Match hali boshlanmagan bo'lsa, hech narsa qilmaymiz
-    if not state.started:
+    # Match hali boshlanmagan bo'lsa, media bilan ishlamaymiz
+    if not state.started or not state.main_message_id:
         return
 
-    # Yangi live post ochamiz
+    # Uchrashuv tugagan bo'lsa yangi live post ochmaymiz
+    if state.period == "finished":
+        return
+
+    # Qaysi bo'limdaligiga qarab sarlavha
     if state.period == "second_half":
-        new_title = "📍 <b>2-bo‘lim live davom etmoqda</b>"
+        title = "📍 <b>2-bo‘lim live davom etmoqda</b>"
+    elif state.period == "halftime":
+        title = "📍 <b>Tanaffusdan keyin live davom etadi</b>"
     else:
-        new_title = "📍 <b>Live davom etmoqda</b>"
+        title = "📍 <b>Live davom etmoqda</b>"
 
-    new_message_id = await create_new_live_post(message.chat.id, new_title)
+    # Yangi live post ochamiz
+    new_message_id = await create_new_live_post(message.chat.id, title)
 
+    # Endi keyingi sharhlar shu postga tushadi
     state.main_message_id = new_message_id
-    state.main_text = new_title
+    state.main_text = title
     await save_state(state)
+
+    # Scoreboard ham yangi post sifatida qayta pastga tushsin
+    try:
+        await scoreboard_recreate_post(
+            bot=bot,
+            channel_id=state.channel_id,
+        )
+    except Exception as e:
+        logging.exception("media paytida scoreboard recreate xatolik: %s", e)
 
 @dp.callback_query(F.data.startswith("extra:"))
 async def handle_extra_time(callback: CallbackQuery):
@@ -679,5 +704,6 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
 
