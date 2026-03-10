@@ -2,28 +2,26 @@ import asyncio
 import logging
 import os
 import aiosqlite
+
+from aiogram.exceptions import TelegramBadRequest
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
+
+from dotenv import load_dotenv
 from formatter import add_match_event_emoji
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode, ChatType
 from aiogram.filters import Command
-from scoreboard import (
-    init_scoreboard_db,
-    scoreboard_register_main_post,
-    scoreboard_sync_from_main_post,
-    scoreboard_set_teams,
-    scoreboard_reset_match,
-)
 from aiogram.types import (
     Message,
     CallbackQuery,
     InlineKeyboardMarkup,
     InlineKeyboardButton,
 )
-from dotenv import load_dotenv
+
 from scoreboard import (
     init_scoreboard_db,
     scoreboard_register_main_post,
@@ -32,7 +30,6 @@ from scoreboard import (
     scoreboard_reset_match,
     scoreboard_recreate_post,
 )
-
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
@@ -298,16 +295,24 @@ async def update_main_post(state: MatchState):
             text=state.main_text[:4096],
             reply_markup=get_main_keyboard(state),
         )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower():
+            logging.exception("update_main_post edit xatolik: %s", e)
+    except Exception as e:
+        logging.exception("update_main_post edit xatolik: %s", e)
 
+    try:
         await scoreboard_sync_from_main_post(
             bot=bot,
             channel_id=state.channel_id,
             main_text=state.main_text,
             replace_current=False,
         )
-
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e).lower():
+            logging.exception("scoreboard sync xatolik: %s", e)
     except Exception as e:
-        logging.exception("update_main_post xatolik: %s", e)
+        logging.exception("scoreboard sync xatolik: %s", e)
 
 async def create_new_live_post(
     channel_id: int,
@@ -514,6 +519,7 @@ async def handle_channel_posts(message: Message):
     if lower == "uchrashuv yakunlandi":
         state.period = "finished"
         state.freeze_minute = "90'"
+        state.stream_url = None
         state.main_text += "\n\n🏁 <b>Uchrashuv yakunlandi</b>"
         await save_state(state)
         await update_main_post(state)
@@ -739,6 +745,10 @@ async def set_stream(message: Message):
 
     url = parts[1].strip()
 
+    if not (url.startswith("http://") or url.startswith("https://") or url.startswith("tg://")):
+        await message.answer("Link to‘g‘ri emas. Masalan: /stream https://example.com")
+        return
+
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT channel_id FROM matches WHERE started = 1 ORDER BY channel_id DESC"
@@ -758,6 +768,30 @@ async def set_stream(message: Message):
 
     await message.answer("✅ Jonli efir link qo‘shildi")
 
+@dp.message(Command("nostream"))
+async def remove_stream(message: Message):
+    if not message.from_user or message.from_user.id != OWNER_ID:
+        return
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT channel_id FROM matches WHERE started = 1 ORDER BY channel_id DESC"
+        ) as cur:
+            row = await cur.fetchone()
+
+    if not row:
+        await message.answer("Aktiv o‘yin topilmadi.")
+        return
+
+    channel_id = row[0]
+    state = await get_state(channel_id)
+    state.stream_url = None
+
+    await save_state(state)
+    await update_main_post(state)
+
+    await message.answer("✅ Jonli efir tugmasi olib tashlandi")
+
 async def main():
     await init_db()
     await init_scoreboard_db()
@@ -768,6 +802,7 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
 
 
