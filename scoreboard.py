@@ -285,12 +285,11 @@ def render_scoreboard(state: ScoreboardState, parsed: ParsedMatchInfo) -> str:
         goals_block = "⚽ <b>Gollar:</b>\n" + "\n".join(goal_lines)
 
     cards_block = f"🟨 {parsed.yellow_count} | 🟥 {parsed.red_count}"
-  
-   last_event_block = ""
-   if parsed.last_event:
-      last_event_block = f"📝 <b>Oxirgi voqea:</b> {escape_html(parsed.last_event)}"
 
-    
+    last_event_block = ""
+    if parsed.last_event:
+        last_event_block = f"📝 <b>Oxirgi voqea:</b> {escape_html(parsed.last_event)}"
+
     parts = [header, "", goals_block, "", cards_block]
     if last_event_block:
         parts.extend(["", last_event_block])
@@ -441,5 +440,6 @@ async def scoreboard_recreate_post(
         await save_scoreboard_state(state)
     except Exception as e:
         logging.exception("scoreboard recreate xatolik: %s", e)
+
 
 
