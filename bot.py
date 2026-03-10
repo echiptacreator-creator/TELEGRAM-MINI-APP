@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 from formatter import add_match_event_emoji
-import aiosqlite
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode, ChatType
@@ -686,3 +685,4 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
