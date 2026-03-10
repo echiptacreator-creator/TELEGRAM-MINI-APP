@@ -307,16 +307,28 @@ async def scoreboard_register_main_post(
     state.main_message_id = main_message_id
     await save_scoreboard_state(state)
 
-    if state.scoreboard_message_id:
-        return
-
     placeholder = (
         f"📊 <b>{escape_html(state.home_team.upper())} 0 — 0 {escape_html(state.away_team.upper())}</b>\n"
         "🕒 <b>TAYYOR</b>"
     )
 
+    if state.scoreboard_message_id:
+        try:
+            await bot.edit_message_text(
+                chat_id=channel_id,
+                message_id=state.scoreboard_message_id,
+                text=placeholder,
+            )
+            return
+        except Exception:
+            state.scoreboard_message_id = None
+            await save_scoreboard_state(state)
+
     try:
-        sent = await bot.send_message(chat_id=channel_id, text=placeholder)
+        sent = await bot.send_message(
+            chat_id=channel_id,
+            text=placeholder,
+        )
         state.scoreboard_message_id = sent.message_id
         await save_scoreboard_state(state)
     except Exception as e:
@@ -387,9 +399,29 @@ async def scoreboard_sync_from_main_post(
             text=scoreboard_text,
         )
     except Exception as e:
+        err_text = str(e).lower()
+
+        # Agar matn o‘zgarmagan bo‘lsa, yangi xabar yubormaymiz
+        if "message is not modified" in err_text:
+            return
+
         logging.exception("scoreboard edit xatolik, qayta yaratamiz: %s", e)
+
+        # Eski xabarni o‘chirishga urinib ko‘ramiz
+        if state.scoreboard_message_id:
+            try:
+                await bot.delete_message(
+                    chat_id=channel_id,
+                    message_id=state.scoreboard_message_id,
+                )
+            except Exception:
+                pass
+
         try:
-            sent = await bot.send_message(chat_id=channel_id, text=scoreboard_text)
+            sent = await bot.send_message(
+                chat_id=channel_id,
+                text=scoreboard_text,
+            )
             state.scoreboard_message_id = sent.message_id
             await save_scoreboard_state(state)
         except Exception as e2:
@@ -401,15 +433,28 @@ async def scoreboard_reset_match(
     main_message_id: int,
 ):
     state = await get_scoreboard_state(channel_id)
+
+    # Eski scoreboardni o‘chiramiz
+    if state.scoreboard_message_id:
+        try:
+            await bot.delete_message(
+                chat_id=channel_id,
+                message_id=state.scoreboard_message_id,
+            )
+        except Exception:
+            pass
+
+    # Eski holatni tozalaymiz
     state.main_message_id = main_message_id
+    state.scoreboard_message_id = None
     state.all_main_text = ""
     await save_scoreboard_state(state)
 
+    # Yangisini yaratamiz
     await scoreboard_register_main_post(
         bot=bot,
         channel_id=channel_id,
         main_message_id=main_message_id,
-
     )
 
 async def scoreboard_recreate_post(
@@ -421,7 +466,6 @@ async def scoreboard_recreate_post(
     parsed = parse_main_post(state.all_main_text, state.home_team, state.away_team)
     scoreboard_text = render_scoreboard(state, parsed)
 
-    # Eski scoreboard postni o‘chirishga harakat qilamiz
     if state.scoreboard_message_id:
         try:
             await bot.delete_message(
@@ -431,7 +475,9 @@ async def scoreboard_recreate_post(
         except Exception:
             pass
 
-    # Yangisini yuboramiz
+    state.scoreboard_message_id = None
+    await save_scoreboard_state(state)
+
     try:
         sent = await bot.send_message(
             chat_id=channel_id,
@@ -441,8 +487,3 @@ async def scoreboard_recreate_post(
         await save_scoreboard_state(state)
     except Exception as e:
         logging.exception("scoreboard recreate xatolik: %s", e)
-
-
-
-
-
