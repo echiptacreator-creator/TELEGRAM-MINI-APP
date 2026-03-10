@@ -68,7 +68,7 @@ class MatchState:
     freeze_minute: Optional[str]
     first_half_extra_asked: int
     second_half_extra_asked: int
-
+    self.stream_url: str | None = None
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -108,6 +108,23 @@ async def init_db():
 
         await db.commit()
 
+
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+def get_main_keyboard(state):
+    if not state.stream_url:
+        return None
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📺 Jonli efir",
+                    url=state.stream_url
+                )
+            ]
+        ]
+    )
 
 async def get_state(channel_id: int) -> MatchState:
     async with aiosqlite.connect(DB_PATH) as db:
@@ -269,6 +286,7 @@ async def update_main_post(state: MatchState):
             chat_id=state.channel_id,
             message_id=state.main_message_id,
             text=state.main_text[:4096],
+            reply_markup=get_main_keyboard(state)
         )
 
         await scoreboard_sync_from_main_post(
@@ -694,6 +712,23 @@ async def cmd_teams(message: Message):
 
     await message.answer(f"Jamoalar saqlandi: {home} vs {away}")
 
+@dp.message(Command("stream"))
+async def set_stream(message: Message):
+
+    if message.from_user.id != OWNER_ID:
+        return
+
+    url = message.text.split(maxsplit=1)[1]
+
+    for state in match_states.values():
+        if state.started:
+            state.stream_url = url
+
+            await update_main_post(state)
+
+            await message.answer("✅ Jonli efir link qo‘shildi")
+            return
+
 async def main():
     await init_db()
     await init_scoreboard_db()
@@ -704,5 +739,6 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
 
