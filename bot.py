@@ -55,7 +55,6 @@ DELETE_DELAY_SECONDS = 30
 
 @dataclass
 class MatchState:
-    stream_url: str | None = None
     channel_id: int
     started: int
     main_message_id: Optional[int]
@@ -69,6 +68,8 @@ class MatchState:
     freeze_minute: Optional[str]
     first_half_extra_asked: int
     second_half_extra_asked: int
+
+    stream_url: str | None = None
 
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -739,6 +740,7 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+
 
 
 
