@@ -408,4 +408,35 @@ async def scoreboard_reset_match(
         bot=bot,
         channel_id=channel_id,
         main_message_id=main_message_id,
+
     )
+
+async def scoreboard_recreate_post(
+    bot: Bot,
+    channel_id: int,
+):
+    state = await get_scoreboard_state(channel_id)
+
+    parsed = parse_main_post(state.all_main_text, state.home_team, state.away_team)
+    scoreboard_text = render_scoreboard(state, parsed)
+
+    # Eski scoreboard postni o‘chirishga harakat qilamiz
+    if state.scoreboard_message_id:
+        try:
+            await bot.delete_message(
+                chat_id=channel_id,
+                message_id=state.scoreboard_message_id,
+            )
+        except Exception:
+            pass
+
+    # Yangisini yuboramiz
+    try:
+        sent = await bot.send_message(
+            chat_id=channel_id,
+            text=scoreboard_text,
+        )
+        state.scoreboard_message_id = sent.message_id
+        await save_scoreboard_state(state)
+    except Exception as e:
+        logging.exception("scoreboard recreate xatolik: %s", e)
