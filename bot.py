@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import aiosqlite
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
